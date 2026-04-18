@@ -11,7 +11,7 @@ static int borderpx = 2;
 /* "OS/2" OpenType tables give more accurate typographic metrics for some fonts,
  * which may or may not improve rendering of box-drawing elements.
  */
-static int ignoreOS2metrics = 0;
+static int ignoreOS2metrics = 1;
 
 /* Multiplier applied to the distance between baselines.
  * Increasing this value can misalign block or line-drawing characters.
@@ -107,7 +107,7 @@ unsigned int tabspaces = 8;
 float alpha = 0.8;
 
 /* Terminal colors (16 first used in escape sequence) */
-static const char *colorname[] = {
+static char *colorname[] = {
 	/* 8 normal colors */
 	"black",
 	"red3",

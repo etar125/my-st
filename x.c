@@ -17,6 +17,10 @@
 
 #include <freetype/tttables.h>
 
+#include <e1_str.h>
+#include <e1_sarr.h>
+#include <elist.h>
+
 char *argv0;
 #include "arg.h"
 #include "st.h"
@@ -2171,9 +2175,110 @@ usage(void)
 	    " [stty_args ...]\n", argv0, argv0);
 }
 
+static int free_colors = 0;
+
 int
 main(int argc, char *argv[])
 {
+	str_t cfpath = emptystr();
+	str_t s1 = cstr_to_str(getenv("HOME"), false);
+	if (!s1.data) {
+		fprintf(stderr, "$HOME not set\n");
+	} else {
+		str_t s2 = cstr_to_str("/.config/st/config.elist", true);
+		if (!s2.data) { goto cfgend; }
+		
+		cfpath = join(&s1, &s2, 0, false);
+		free(s2.data);
+		if (!cfpath.data) { goto cfgend; }
+		
+		FILE *cf = fopen(cfpath.data, "r");
+		free(cfpath.data);
+		if (!cf) { goto cfgend; }
+		
+		char *buf;
+		size_t filesize;
+		str_t file = emptystr();
+		
+		fseek(cf, 0, SEEK_END);
+		filesize = ftell(cf);
+		rewind(cf);
+		buf = malloc(filesize + 1);
+		if (!buf) { fclose(cf); goto cfgend; }
+		fread(buf, 1, filesize, cf);
+		fclose(cf);
+		buf[filesize] = '\0';
+		file = cstr_to_str(buf, false);
+		
+		elist el = elist_read(file);
+		free(file.data);
+		for (size_t i = 0; i < el.count; i++ ){
+			elist_obj o = el.objs[i];
+			for (size_t k = 0; k < o.count; k++) {
+				elist_pair p = o.pairs[k];
+				
+				#define ifeq(x) if (strcmp(p.key.data, x) == 0)
+				#define _1s(x, s) if (p.count == 1) { x = strdup(p.values.data); } \
+				else { fprintf(stderr, "key '%s' values count != 1", s); }
+				#define _1i(x, s) if (p.count == 1) { x = strtol(p.values.data, NULL, 10); } \
+				else { fprintf(stderr, "key '%s' values count != 1", s); }
+				#define _1u(x, s) if (p.count == 1) { x = strtoul(p.values.data, NULL, 10); } \
+				else { fprintf(stderr, "key '%s' values count != 1", s); }
+				#define _1f(x, s) if (p.count == 1) { x = strtof(p.values.data, NULL); } \
+				else { fprintf(stderr, "key '%s' values count != 1", s); }
+				
+				#define ifeqs(x, s) ifeq(s) { _1s(x, s) }
+				#define ifeqi(x, s) ifeq(s) { _1i(x, s) }
+				#define ifequ(x, s) ifeq(s) { _1u(x, s) }
+				#define ifeqf(x, s) ifeq(s) { _1f(x, s) }
+				
+				ifeqs(font, "font")
+				else ifeqs(shell, "shell")
+				else ifeqs(termname, "termname")
+				else ifeqi(ignoreOS2metrics, "ignoreOS2metrics")
+				else ifeqf(cwscale, "cwscale")
+				else ifeqf(chscale, "chscale")
+				else ifeqf(linespacing, "linespacing")
+				else ifequ(blinktimeout, "blinktimeout")
+				else ifequ(cursorthickness, "cursorthickness")
+				else ifequ(tabspaces, "tabspaces")
+				else ifeqf(alpha, "alpha")
+				else ifequ(cursorstyle, "cursorstyle")
+				else ifequ(mousefg, "mousefg")
+				else ifequ(mousebg, "mousebg")
+				else ifequ(defaultattr, "defaultattr")
+				else ifequ(defaultfg, "defaultfg")
+				else ifequ(defaultbg, "defaultbg")
+				else ifequ(defaultcs, "defaultcs")
+				else ifequ(defaultrcs, "defaultrcs")
+				else ifeq("colors") {
+					if (p.count == 16) {
+						if (free_colors) {
+							for (size_t cq = 0; cq < 16; cq++) {
+								free(colorname[cq]);
+							}
+						}
+						for (size_t cq = 0; cq < 16; cq++) {
+							str_t color = sarr_getdup(&p.values, cq);
+							colorname[cq] = color.data;
+						}
+						free_colors = 1;
+					} else { fprintf(stderr, "key 'colors' values count != 16"); }
+				}
+				else ifeqs(colorname[256], "cursorcolor")
+				else ifeqs(colorname[257], "rcursorcolor")
+				else ifeqs(colorname[258], "fgcolor")
+				else ifeqs(colorname[259], "bgcolor")
+				
+				free(p.key.data);
+				free(p.values.data);
+			}
+			free(o.pairs);
+		}
+		free(el.objs);
+  }
+cfgend:
+  
 	xw.l = xw.t = 0;
 	xw.isfixed = False;
 	xsetcursor(cursorstyle);
@@ -2242,6 +2347,12 @@ run:
 	xsetenv();
 	selinit();
 	run();
+
+	if (free_colors) {
+		for (size_t i = 0; i < 16; i++) {
+			free(colorname[i]);
+		}
+	}
 
 	return 0;
 }
