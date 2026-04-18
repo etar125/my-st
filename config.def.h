@@ -8,6 +8,16 @@
 static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
 static int borderpx = 2;
 
+/* "OS/2" OpenType tables give more accurate typographic metrics for some fonts,
+ * which may or may not improve rendering of box-drawing elements.
+ */
+static int ignoreOS2metrics = 0;
+
+/* Multiplier applied to the distance between baselines.
+ * Increasing this value can misalign block or line-drawing characters.
+ */
+static float linespacing = 1.0;
+
 /*
  * What program is execed by st depends of these precedence rules:
  * 1: program passed with -e

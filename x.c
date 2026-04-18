@@ -15,6 +15,8 @@
 #include <X11/Xft/Xft.h>
 #include <X11/XKBlib.h>
 
+#include <freetype/tttables.h>
+
 char *argv0;
 #include "arg.h"
 #include "st.h"
@@ -127,6 +129,10 @@ typedef struct {
 	int width;
 	int ascent;
 	int descent;
+	int strike_y;
+	int strike_h;
+	int underline_y;
+	int underline_h;
 	int badslant;
 	int badweight;
 	short lbearing;
@@ -987,13 +993,66 @@ xloadfont(Font *f, FcPattern *pattern)
 	f->set = NULL;
 	f->pattern = configured;
 
-	f->ascent = f->match->ascent;
-	f->descent = f->match->descent;
+	f->ascent = f->match->ascent * linespacing;
+	f->descent = f->match->descent * linespacing;
 	f->lbearing = 0;
 	f->rbearing = f->match->max_advance_width;
 
 	f->height = f->ascent + f->descent;
 	f->width = DIVCEIL(extents.xOff, strlen(ascii_printable));
+
+	f->strike_y = -2 * f->match->ascent / 3;
+	f->strike_h = 1;
+	f->underline_y = 1;
+	f->underline_h = 1;
+
+	/* Extract proper typographic metrics if available. */
+	do {
+		TT_OS2 *os2;
+		TT_Postscript *post;
+		FT_Face face;
+		double px, uppx, asc, desc, lgap;
+		if (ignoreOS2metrics)
+			break;
+		if (FcPatternGetDouble(f->match->pattern,
+				FC_PIXEL_SIZE, 0, &px) != FcResultMatch)
+			break;
+
+		face = XftLockFace(f->match);
+		/* Rerturn value may be NULL. This is not documented. */
+		if (!face)
+			break;
+		os2 = FT_Get_Sfnt_Table(face, FT_SFNT_OS2);
+		if (!os2) {
+			XftUnlockFace(f->match);
+			break;
+		}
+		uppx = face->units_per_EM / px;
+		asc = os2->sTypoAscender / uppx;
+		desc = os2->sTypoDescender / uppx;
+		lgap = os2->sTypoLineGap / uppx;
+		lgap = (asc + desc + lgap) * linespacing - asc - desc;
+		post = FT_Get_Sfnt_Table(face, FT_SFNT_POST);
+		if (!post) {
+			f->strike_y = -2 * asc / 3;
+		} else {
+			f->strike_y = -os2->yStrikeoutPosition / uppx;
+			f->strike_h = os2->yStrikeoutSize / uppx;
+			if (f->strike_h == 0)
+				f->strike_h = 1;
+			f->underline_y = post->underlinePosition / uppx;
+			f->underline_h = post->underlineThickness / uppx;
+			if (f->underline_y == 0)
+				f->underline_y = 1;
+			if (f->underline_h == 0)
+				f->underline_h = f->strike_h;
+		}
+		XftUnlockFace(f->match);
+
+		f->ascent = asc + lgap/2;
+		f->descent = -desc + lgap/2 + asc - f->ascent;
+		f->height = f->ascent + f->descent;
+	} while (0);
 
 	return 0;
 }
@@ -1521,13 +1580,15 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 
 	/* Render underline and strikethrough. */
 	if (base.mode & ATTR_UNDERLINE) {
-		XftDrawRect(xw.draw, fg, winx, winy + dc.font.ascent * chscale + 1,
-				width, 1);
+		XftDrawRect(xw.draw, fg, winx,
+				winy + (dc.font.ascent + dc.font.underline_y) * chscale,
+				width, dc.font.underline_h);
 	}
 
 	if (base.mode & ATTR_STRUCK) {
-		XftDrawRect(xw.draw, fg, winx, winy + 2 * dc.font.ascent * chscale / 3,
-				width, 1);
+		XftDrawRect(xw.draw, fg, winx,
+				winy + (dc.font.ascent + dc.font.strike_y) * chscale - dc.font.strike_h/2,
+				width, dc.font.strike_h);
 	}
 
 	/* Reset clip to none. */
