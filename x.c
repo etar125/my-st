@@ -2269,6 +2269,7 @@ main(int argc, char *argv[])
 				else ifeqs(colorname[257], "rcursorcolor")
 				else ifeqs(colorname[258], "fgcolor")
 				else ifeqs(colorname[259], "bgcolor")
+				else ifeqi(allowwindowops, "allowwindowops")
 				
 				free(p.key.data);
 				free(p.values.data);
