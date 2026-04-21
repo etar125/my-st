@@ -19,6 +19,15 @@ static int ignoreOS2metrics = 1;
 static float linespacing = 1.0;
 
 /*
+ * background image
+ * expects farbfeld format
+ * pseudo transparency fixes coordinates to the screen origin
+ */
+static char *bgfile = "/path/to/image.ff";
+static int pseudotransparency = 0;
+static int enablebg = 0;
+
+/*
  * What program is execed by st depends of these precedence rules:
  * 1: program passed with -e
  * 2: scroll and/or utmp
