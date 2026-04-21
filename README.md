@@ -14,7 +14,7 @@
 - fontmetrics
 - background image
 
-Поскольку патчи `alpha` и `background` image не совместимы,
+Поскольку патчи `alpha` и `background image` не совместимы,
 я их разделил, поэтому можно выбрать только что-то одно.
 
 Моя конфигурация (`~/.config/st/config.elist`):
