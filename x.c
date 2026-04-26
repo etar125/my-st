@@ -18,8 +18,7 @@
 
 #include <freetype/tttables.h>
 
-#include <e1_str.h>
-#include <e1_sarr.h>
+#include <e1l.h>
 #include <elist.h>
 
 char *argv0;
@@ -2319,25 +2318,22 @@ static int free_colors = 0;
 int
 main(int argc, char *argv[])
 {
-	str_t cfpath = emptystr();
-	str_t s1 = cstr_to_str(getenv("HOME"), false);
-	if (!s1.data) {
+	char *cfpath = NULL;
+	char *s1 = getenv("HOME");
+	if (!s1) {
 		fprintf(stderr, "$HOME not set\n");
 	} else {
-		str_t s2 = cstr_to_str("/.config/st/config.elist", true);
-		if (!s2.data) { goto cfgend; }
+		char *s2 = "/.config/st/config.elist";
 		
-		cfpath = join(&s1, &s2, 0, false);
-		free(s2.data);
-		if (!cfpath.data) { goto cfgend; }
+		cfpath = join(s1, strlen(s1), s2, strlen(s2), NULL, 0, NULL);
+		if (!cfpath) { goto cfgend; }
 		
-		FILE *cf = fopen(cfpath.data, "r");
-		free(cfpath.data);
+		FILE *cf = fopen(cfpath, "r");
+		free(cfpath);
 		if (!cf) { goto cfgend; }
 		
 		char *buf;
 		size_t filesize;
-		str_t file = emptystr();
 		
 		fseek(cf, 0, SEEK_END);
 		filesize = ftell(cf);
@@ -2347,23 +2343,22 @@ main(int argc, char *argv[])
 		fread(buf, 1, filesize, cf);
 		fclose(cf);
 		buf[filesize] = '\0';
-		file = cstr_to_str(buf, false);
 		
-		elist el = elist_read(file);
-		free(file.data);
+		elist el = elist_read(buf, filesize);
+		free(buf);
 		for (size_t i = 0; i < el.count; i++ ){
 			elist_obj o = el.objs[i];
 			for (size_t k = 0; k < o.count; k++) {
 				elist_pair p = o.pairs[k];
 				
-				#define ifeq(x) if (strcmp(p.key.data, x) == 0)
-				#define _1s(x, s) if (p.count == 1) { x = strdup(p.values.data); } \
+				#define ifeq(x) if (strcmp(p.key, x) == 0)
+				#define _1s(x, s) if (p.values.count == 1) { x = strdup(sarr_getstr(&p.values, 0, NULL)); } \
 				else { fprintf(stderr, "key '%s' values count != 1", s); }
-				#define _1i(x, s) if (p.count == 1) { x = strtol(p.values.data, NULL, 10); } \
+				#define _1i(x, s) if (p.values.count == 1) { x = strtol(sarr_getstr(&p.values, 0, NULL), NULL, 10); } \
 				else { fprintf(stderr, "key '%s' values count != 1", s); }
-				#define _1u(x, s) if (p.count == 1) { x = strtoul(p.values.data, NULL, 10); } \
+				#define _1u(x, s) if (p.values.count == 1) { x = strtoul(sarr_getstr(&p.values, 0, NULL), NULL, 10); } \
 				else { fprintf(stderr, "key '%s' values count != 1", s); }
-				#define _1f(x, s) if (p.count == 1) { x = strtof(p.values.data, NULL); } \
+				#define _1f(x, s) if (p.values.count == 1) { x = strtof(sarr_getstr(&p.values, 0, NULL), NULL); } \
 				else { fprintf(stderr, "key '%s' values count != 1", s); }
 				
 				#define ifeqs(x, s) ifeq(s) { _1s(x, s) }
@@ -2391,15 +2386,15 @@ main(int argc, char *argv[])
 				else ifequ(defaultcs, "defaultcs")
 				else ifequ(defaultrcs, "defaultrcs")
 				else ifeq("colors") {
-					if (p.count == 16) {
+					if (p.values.count == 16) {
 						if (free_colors) {
 							for (size_t cq = 0; cq < 16; cq++) {
 								free(colorname[cq]);
 							}
 						}
 						for (size_t cq = 0; cq < 16; cq++) {
-							str_t color = sarr_getdup(&p.values, cq);
-							colorname[cq] = color.data;
+							char *color = sarr_getstr(&p.values, cq, NULL);
+							colorname[cq] = strdup(color);
 						}
 						free_colors = 1;
 					} else { fprintf(stderr, "key 'colors' values count != 16"); }
@@ -2416,8 +2411,9 @@ main(int argc, char *argv[])
                 }
 
 				
-				free(p.key.data);
-				free(p.values.data);
+				free(p.key);
+				free(p.values.strs);
+				free(p.values.offsets);
 			}
 			free(o.pairs);
 		}
